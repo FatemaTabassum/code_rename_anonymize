@@ -224,7 +224,7 @@ Layout note: `code_juliet/`, `discussions/` and `prompt_pipeline/` now live unde
 
 **Read sections 1-11 above first; this section is the current state and the next step.**
 
-> **Update 2026-09-25:** the `liza/` folder was removed; `code_juliet/`, `discussions/`, `prompt_pipeline/`, `claude_reference/` and `progress_report_week.tex` now sit at the repo root. Read `liza/X` below as `X`.
+> **Update 2026-09-25:** the `liza/` folder was removed; `code_juliet/`, `discussions/`, `prompt_pipeline/`, `claude_reference/` and `progress_report_week.tex` now sit at the repo root. Read `liza/X` below as `X`. Later the same day `CFGAVE/`, `juliet-labeling/`, `scripts/`, `code_juliet/` and the original root `README.md` were moved into `others/` (not the user's code; read-only): read `scripts/X` and `code_juliet/X` below as `others/scripts/X` and `others/code_juliet/X`.
 >
 > **Update 2026-09-24:** the Claude-written `scripts/check_group.py`, `scripts/merge_c.py` and `scripts/merge_ll_no_llvm.py` were moved to `liza/claude_reference/`; Claude's edit to `scripts/create_ll.py` was reverted. `scripts/` belongs to another project and must not be changed. Paths `scripts/...` for those three files below are historical. Current state: `STATUS.md`.
 
