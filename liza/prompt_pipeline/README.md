@@ -19,3 +19,36 @@ No LLVM IR is used; only `clang` (AST, `-c`) and `nm`.
 
 - `src/` code, `tests/` tests, `outputs/` generated prompts (not committed).
 - `src/prototype_cg_rename.py` is the throwaway prototype (copied from the session scratchpad); known gaps are listed in the discussion file, section 4.
+
+## How to run
+
+Run from the repo root (`vulchecker-misc-main/`). Each command goes through `track.py`, so the exact
+command, code version and result are recorded in `runs/runs.jsonl` (list with `python3 track.py --last 10`).
+Data: `/Users/fatema/projects/renaming_folder/CWE415`, `CWE416`.
+
+**Step 1: grouping** (done, 22 Sep)
+
+```bash
+uv run python track.py --note "step 1: group CWE415" -- \
+  uv run python liza/prompt_pipeline/src/step_1_grouping.py \
+  /Users/fatema/projects/renaming_folder/CWE415/source_files \
+  liza/prompt_pipeline/outputs/step_1/CWE415_groups
+
+uv run python track.py --note "step 1: group CWE416" -- \
+  uv run python liza/prompt_pipeline/src/step_1_grouping.py \
+  /Users/fatema/projects/renaming_folder/CWE416/source_files \
+  liza/prompt_pipeline/outputs/step_1/CWE416_groups
+
+# coverage check (every source file lands in exactly one group)
+uv run python liza/prompt_pipeline/src/step_1_grouping.py --check \
+  /Users/fatema/projects/renaming_folder/CWE415/source_files
+```
+
+**Step 2: gate** (not run yet; `-I` points at the folder with `std_testcase.h`)
+
+```bash
+uv run python track.py --note "step 2: gate CWE415" -- \
+  uv run python liza/prompt_pipeline/src/step_2_gate.py \
+  liza/prompt_pipeline/outputs/step_1/CWE415_groups \
+  -I /Users/fatema/projects/renaming_folder/juliet/CWE190/source_files
+```
