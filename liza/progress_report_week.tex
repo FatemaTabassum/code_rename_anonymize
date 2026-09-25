@@ -1,0 +1,373 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\title{Progress Report --- Reliability of LLMs for Vulnerability Detection}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \textbf{Progress Report --- Reliability of LLMs for Vulnerability Detection}}\\[1em]
+\begin{tabular}{ll}
+\textbf{Date:} & [To be written] \\
+\textbf{Prepared for:} & [Professor name] \\
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+\hrule
+\vspace{1em}
+
+\begin{abstract}
+\noindent This report covers my LLM vulnerability-detection project on the CWE-415 Juliet corpus.
+Section~\ref{sec:background} is the background: what the study is trying to do, what the corpus
+is, and the terms I use throughout. The progress starts in Section~\ref{sec:bottomline}.
+
+\noindent The short version is this. GPT-4o gets 53.8\% accuracy on this corpus. The usual
+explanation is label leakage --- names like \texttt{bad()} and \texttt{badSink} give the answer
+away. The evidence does not settle that cleanly. On the 1,306 files that declare no
+\texttt{bad*()} function, the model still answers ``vulnerable'' 89.6\% of the time. Paired
+discrimination across the corpus is 11.4\%, below the 25\% you would get from coin flips. But a
+stricter check does show the cue carries some weight. On the 276 files where no
+\texttt{bad}-prefixed token survives anywhere, accuracy roughly triples, to 0.304. So the fair
+claim is that the model badly under-uses the cue, not that it ignores it. On top of that, I found
+two coverage gaps in the anonymization pipeline. They leave 68\% of the corpus only partly
+anonymized. Until those are closed, the leakage-versus-reasoning question stays open. This week
+is about closing them, re-checking the leak rate, and finishing a short list of low-cost fixes
+and experiments.
+\end{abstract}
+
+\vspace{0.5em}
+
+\section{Project Background}
+\label{sec:background}
+
+This section is background only. It restates what the study is trying to do, for anyone who has
+not seen the manuscript draft. The progress itself starts in Section~\ref{sec:bottomline}.
+
+\subsection*{The study}
+
+Large Language Models (LLMs) have recently been proposed as tools for automated
+vulnerability detection; however, there is still limited evidence that they can consistently
+identify security-critical bugs. In this work, we attempt to present a comprehensive empirical study on the
+reliability of LLMs for vulnerability detection. Specifically, initially we intend to examine how small,
+syntactically neutral code transformations --- such as renaming API or function identifiers,
+removing comments, or altering whitespace and formatting --- affect model performance. Using a
+synthetic subset of the Juliet Test Suite, we would like to evaluate four representative LLM
+families: GPT-3.5-Turbo, GPT-4o-Mini, Claude, and Llama-3. We would further compare the
+effectiveness of zero-shot, few-shot, and chain-of-thought (CoT) prompting strategies.
+
+The central question is whether an LLM's apparent detection ability survives transformations
+that change nothing about the program's semantics. If accuracy collapses when identifiers are
+renamed or comments are stripped, the model was reading surface cues rather than reasoning about
+memory behaviour --- which matters, because a real codebase does not label its own bugs.
+
+\subsection*{The corpus}
+
+Experiments use the \textbf{Juliet Test Suite}, NIST's synthetic C/C++ benchmark. Juliet is
+convenient because ground truth is exact and the classes are balanced, but it has a property
+that drives most of this report. Nothing in Juliet is written by hand. Every testcase is
+generated from a template, and the generator writes the answer into the names it produces. The
+vulnerable function is literally called \texttt{bad()}. Its safe twin is called \texttt{good()}.
+The construct around them usually carries the whole CWE identifier
+(\texttt{CWE415\_Double\_Free\_\_malloc\_free\_char\_81}). So the ground truth is not something a
+model has to work out from the memory behaviour. It is spelled out in the identifiers, before the
+model reads a single statement. Each testcase is emitted as an
+\texttt{\_omitbad}/\texttt{\_omitgood} pair differing by only a few lines. The work reported here
+uses the CWE-415 (double free) and CWE-416 (use after free) subsets; the wider corpus statistics
+are in Table~\ref{tab:corpus}.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+CWE & Total files & Good files & Vulnerable files & Header files \\
+\midrule
+CWE-416 & 1,040 & 520 & 520 & 0 \\
+CWE-415 & 3,368 & 1,644 & 1,644 & 80 \\
+CWE-191 & 9,577 & 4,722 & 4,722 & 133 \\
+CWE-190 & 13,108 & 6,444 & 6,444 & 220 \\
+CWE-122 & 19,747 & 9,630 & 9,630 & 487 \\
+CWE-121 & 16,049 & 7,871 & 7,871 & 307 \\
+\bottomrule
+\end{tabular}
+\caption{Unprocessed dataset statistics, Juliet Test Suite.}
+\label{tab:corpus}
+\end{table}
+
+\subsection*{The two experimental variables}
+
+\subsubsection*{Cleaning setups}
+The cleaning setups control how much non-semantic material the model sees. This is the main
+variable the study is built around:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{clean\_setup\_0} --- raw dataset, unmodified. All comments, macros, and
+  formatting preserved. This is the baseline, and it is the only setup that has been run so far,
+  which is why every number in Section~\ref{sec:data} comes from it.
+  \item \texttt{clean\_setup\_1} --- moderate cleaning: remove comments, rename all user-defined
+  functions and namespaces, remove macros except \texttt{\#include}, collapse blank lines, drop
+  empty or invalid source files.
+  \item \texttt{clean\_setup\_2} --- aggressive normalization extending setup 1: newlines
+  collapsed to single spaces, tabs replaced with spaces, minimizing superficial code variation.
+\end{itemize}
+
+The renaming in setups 1 and 2 is the \emph{anonymization pipeline} --- the Joern/libclang stage
+that rewrites Juliet's identifiers into neutral names. A function named \texttt{bad()} gives the
+answer away. A model can answer ``vulnerable'' without reading the code at all. It is a common assumption that renaming removes
+that shortcut. So every claim in this report about leakage depends on the renaming being
+complete.
+
+\subsubsection*{Prompting strategies}
+The prompting strategy is the second variable. There are three:
+
+\begin{itemize}[leftmargin=*]
+  \item zero-shot,
+  \item few-shot, and
+  \item chain-of-thought (CoT).
+\end{itemize}
+
+Each one comes in two variants: a \emph{basic} variant that asks ``is this code vulnerable?'',
+and a \emph{CWE-specific} variant that asks ``is this code vulnerable to CWE-415?''. Every result
+reported below uses \texttt{zero\_shot\_cwe} --- zero-shot prompting with the CWE-specific
+question.
+
+
+\subsection*{Where this report fits}
+
+The plan is straightforward. First, anonymize the corpus. Then run each model on every cleaning
+setup and prompting strategy. If accuracy falls once the cues are gone, that drop tells us how
+much the model was leaning on them.
+
+The rest of this report is about why I am not there yet. The baseline results were stranger than
+I expected. And when I checked the anonymization step, I found two gaps in what it actually
+renames. Those gaps have to be fixed first. Until they are, comparing one cleaning setup against
+another does not tell us much.
+
+\section{Bottom Line}
+\label{sec:bottomline}
+
+I started from the usual explanation. GPT-4o does badly on the CWE-415 corpus: 53.8\% accuracy,
+and it answers ``vulnerable'' on 90.4\% of the files. The assumption is that this is label
+leakage. The model sees a name like \texttt{bad()}, \texttt{badSink}, or
+\texttt{CWE415\_Double\_Free\_\_...} and reads the answer off it.
+
+The numbers do not really support that. There are 1,306 files with no \texttt{bad*()} function in
+them at all, although most of them still have the word ``bad'' somewhere, left behind in the
+header comments. GPT-4o calls 89.6\% of them vulnerable. So I narrowed it down further. In the
+276 files where no \texttt{bad}-prefixed token survives anywhere, accuracy roughly triples, to
+0.304.
+
+So the model is not ignoring the cue. It is using it far less than it should, given how clean a
+signal it is. I'm still working through what that means. Part of the reason is two gaps I found
+in how the anonymization pipeline decides what counts as an identifier to rename:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Gap 1 --- the rule picks symbols by name, and Juliet's C++ testcases slip past
+  it.} The pipeline renames a symbol only if its name matches the regex \texttt{.*CWE.*}
+  (\texttt{src/joern/joern\_symbols.sc}, lines 8--9). Juliet's C-style testcases put the full
+  \texttt{CWE415\_Double\_Free\_\_...} prefix on the function name. Those match, and they get
+  renamed. The C++-style testcases do it differently. They wrap the same logic in a namespace
+  and drop the prefix from everything inside it, so the names are just \texttt{bad()},
+  \texttt{badSink}, \texttt{badGlobal}. Juliet's own source comment says this is deliberate ---
+  the namespace already makes the name unique. The regex never sees any of them. The result:
+  2,288 of 3,368 files (68\%) still contain at least one label-bearing identifier after
+  ``anonymization.''
+
+  \item \textbf{Gap 2 --- class and struct names are never looked at.} The collection script
+  queries \texttt{cpg.method}, \texttt{cpg.local}, and \texttt{cpg.namespaceBlock}. It never
+  queries \texttt{cpg.typeDecl}. So a name like
+  \texttt{class CWE415\_Double\_Free\_\_malloc\_free\_char\_81\_bad} is invisible to it. That
+  name matches the \texttt{.*CWE.*} pattern perfectly. It just never becomes a candidate,
+  because nothing collects it in the first place. This affects 80 files.
+\end{itemize}
+
+What this means in practice: I can only trust the ``the model under-uses leaked names'' finding
+on the part of the corpus where anonymization actually worked. That is why both gaps have to be
+closed this week. It holds no matter which way the analysis eventually points.
+
+\section{What the Data Shows}
+\label{sec:data}
+
+All of this comes from the \texttt{zero\_shot\_cwe} runs already in
+\texttt{results/all\_results.csv}. One caveat first. Every row there is \texttt{clean\_setup\_0}.
+No cleaning was applied at all, so the model was reading prompts with the CWE label sitting right
+there in the code. Even with the answer handed to it, GPT-4o did not do well.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+Model / CWE & Total & Acc & Prec & Rec & F1 & TP & TN & FP & FN \\
+\midrule
+gpt-4o / CWE-415 & 3,288 & 53.8\% & 52.1\% & 94.2\% & 0.6707 & 1,548 & 220 & 1,424 & 96 \\
+gpt-4o / CWE-416 & 1,040 & 52.0\% & 51.0\% & 99.8\% & 0.675 & 519 & 22 & 498 & 1 \\
+\bottomrule
+\end{tabular}
+\caption{Published results, \texttt{zero\_shot\_cwe} strategy.}
+\end{table}
+
+The F1 scores look almost respectable. The confusion matrices do not. On CWE-415 there are 1,424
+false positives against only 220 true negatives. On CWE-416 it is 498 false positives, 22 true
+negatives, and a single false negative. The model said \textit{vulnerable} on 90.4\% of CWE-415
+samples and 97.8\% of CWE-416 samples. An F1 near 0.67 on a balanced task is what you get from a
+model that says yes to almost everything.
+
+That is the aggregate picture. It gets clearer when I break CWE-415 down by what the file
+actually contains:
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Subset & $n$ & Predicted ``vulnerable'' & Accuracy \\
+\midrule
+File declares \texttt{bad*()} & 1,294 & 100.0\% & 1.000 \\
+File declares only \texttt{good*()} & 1,306 & 89.6\% & 0.104 \\
+\quad --- of which, no \texttt{bad}-prefixed token at all & 276 & 69.6\% & 0.304 \\
+\bottomrule
+\end{tabular}
+\caption{Behavioural breakdown, GPT-4o on CWE-415.}
+\end{table}
+
+The first row is not evidence of much. The model predicts vulnerable on almost everything, so any
+group that is 100\% actually-vulnerable scores 1.000 for free. The second row is closer to a real
+test, but not quite. These files declare no \texttt{bad*()} function, but most of them still say
+``bad'' somewhere in the header comments Juliet leaves behind (\texttt{BadSource:},
+\texttt{BadSink:}, and so on). The model calls them vulnerable 89.6\% of the time anyway. The
+third row is the one that matters --- the 276 files with no \texttt{bad}-prefixed token anywhere.
+There the positive rate drops and accuracy roughly triples, to 0.304. So the model does use the
+cue. It just uses it far less than it should, given that the cue separates the two classes almost
+perfectly.
+
+Aggregate metrics can hide a pattern like this. So I also computed \textbf{paired
+discrimination}. Juliet generates each testcase as an \texttt{\_omitbad}/\texttt{\_omitgood} pair
+that differs by only a few lines. I scored a pair as correct only when the model got both halves
+right.
+
+\begin{center}
+PairedDiscrimination $= 187 / 1{,}644 = \textbf{11.4\%}$
+\end{center}
+
+Independent coin flips would land at 25\%. Scoring \textit{below} chance is not noise. It is what
+you see when a model gives the same answer no matter what it is shown.
+
+The false positives make this concrete. In several cases the model names the safe function
+correctly in its own explanation, and still answers \textit{vulnerable}:
+
+\begin{quote}
+\texttt{..\_new\_delete\_array\_char\_42\_omitbad.cpp} $\rightarrow$ ``The function
+\texttt{goodB2GSource} deletes ...''\\
+\texttt{..\_malloc\_free\_int64\_t\_74b\_omitbad.cpp} $\rightarrow$ ``The function potentially
+frees memory ...''\\
+\texttt{..\_new\_delete\_class\_05\_omitbad.cpp} $\rightarrow$ ``The code contains a double free
+vulnerabi...''
+\end{quote}
+
+It finds the right function and still gets the label wrong. That is not a lexical shortcut
+failing. It looks more like a default answer the model falls back to, whatever it just read.
+
+\section{Why This Forces a Code Change This Week}
+\label{sec:fix}
+
+The two gaps in Section~\ref{sec:bottomline} have the same root cause. In the pipeline, what gets
+anonymized is decided by a regex. Right now that regex is \texttt{.*CWE.*}, so a symbol is
+renamed only if its \textit{name} contains ``CWE'' somewhere. I think that approach has a
+problem. It means guessing every naming convention Juliet might use, in every CWE directory,
+forever. I
+could widen the regex to catch more variants --- \texttt{cwe}, \texttt{bad}, \texttt{good},
+\texttt{sink}, \texttt{source}, \texttt{flaw}. That would catch more of them, but it is still a
+guess. And I would have to audit it again for the next corpus.
+
+The fix I want to make this week is simpler than a better regex. Stop matching on the name. Match
+on where the symbol is declared instead. Every function, variable, namespace, and type declared
+in a file inside the input directory gets renamed, with \texttt{main} as the only exception.
+Under that rule there is nothing left to miss. It does not matter what Juliet named
+\texttt{bad()}, because the rule never looks at the name.
+
+It also generalizes better. In CWE-121/122 the leaking identifiers are \texttt{dataBadBuffer} and
+\texttt{dataGoodBuffer}. There is no ``CWE'' substring anywhere in them. A location-based rule
+catches those on day one. A name-based rule catches them only after someone notices.
+
+Concretely, the change touches two files:
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{>{\raggedright\arraybackslash}p{5.5cm}>{\raggedright\arraybackslash}p{9.2cm}}
+\toprule
+File & Change \\
+\midrule
+\texttt{joern\_symbols.sc} & Replace the name-regex filter with a declared-in-corpus filter;
+add \texttt{cpg.typeDecl} collection so class/struct names are seen at all. \\
+\addlinespace
+\texttt{03\_apply\_\allowbreak renames\_\allowbreak libclang.py} & Add class/struct declaration
+and type-reference kinds so the newly-collected symbols are actually rewritten, not just
+detected. \\
+\bottomrule
+\end{tabular}
+\caption{Change set for the anonymization fix.}
+\end{table}
+
+One consequence I want to flag to you directly. This makes the corpus much more aggressively
+anonymized than before --- \texttt{func\_000412} calling \texttt{func\_000413}, with none of
+Juliet's original naming left. If part of the goal is to mirror how the original benchmark
+authors preprocessed their data, that is a real divergence, not a side effect. I would rather
+state it in the methods section than let a reviewer find it. I think it is the right call for
+measuring detection ability, but I want your read before I treat it as settled.
+
+On urgency: until this is fixed, I cannot honestly write ``every user-declared identifier is
+replaced'' in a methods section. It is not true right now, and it is the kind of claim a reviewer
+checks in five minutes. That holds no matter how the leakage-versus-reasoning question resolves,
+which is why it comes before everything else on my list this week.
+
+\section{Plan for the Upcoming Week}
+
+Roughly in the order I plan to do them:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Fix the anonymization pipeline.} The two-file change from
+  Section~\ref{sec:fix}: the declaration-site filter and \texttt{cpg.typeDecl} collection in
+  \texttt{joern\_symbols.sc}, plus the matching rewrite support in
+  \texttt{03\_apply\_renames\_libclang.py}. This is the main thing this week is for.
+
+  \item \textbf{Re-run the leak audit on the fixed pipeline.} Right now 68\% of files still leak
+  the label after anonymization. I want to see that number drop to zero before I trust anything
+  downstream of it.
+
+  \item \textbf{Fix the \texttt{'Prediction'} key bug in \texttt{evaluator.py}.} A ten-minute
+  fix. It is silently mislabeling the precision column, and I would rather catch it now than
+  after I regenerate the result tables.
+
+  \item \textbf{Add paired discrimination as a reported metric.} I compute it by hand at the
+  moment. Putting it in \texttt{evaluator.py} means every future run reports it automatically,
+  including the runs on the fixed pipeline.
+
+  \item \textbf{Run \texttt{clean\_setup\_1} and \texttt{clean\_setup\_2}.} Both already exist
+  and neither has ever been run. This is pure inference time, no new code. I am curious what
+  stripping the \texttt{POTENTIAL FLAW} comment does to precision. That comment is currently
+  \textit{anti}-correlated with the vulnerable label (Section~\ref{sec:data}), so the direction
+  of the effect is a genuine open question, not a foregone conclusion.
+\end{enumerate}
+
+If the pipeline fix lands early enough in the week, I would also like to re-run the GPT-4o
+evaluation on the newly anonymized corpus, and see whether the 89.6\% false-positive rate on
+clean files holds up. That is a stretch goal, not a commitment. Items 1--3 come first.
+
+\section{Open Question for Discussion}
+
+There is one thing I would like your input on. The fixed pipeline anonymizes much more
+aggressively than the current one. Every declared identifier gets replaced, not just the ones
+with ``CWE'' in the name. I have not tracked down how other papers using Juliet handle this, so I
+have no baseline for whether that level of anonymization is standard or unusual. I would rather
+flag the gap than assume it does not matter. Is it worth chasing down before I finalize the
+pipeline, or is it fine to state as a deliberate choice either way?
+
+\end{document}

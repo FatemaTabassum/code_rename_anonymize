@@ -1,0 +1,13 @@
+# generated / large
+liza/prompt_pipeline/outputs/
+runs/logs/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.pytest_cache/
+
+# auto-generated Claude session logs (not useful as history)
+.claude/logs/
+**/.claude/logs/
+.claude/settings.local.json
