@@ -8,7 +8,7 @@
 
 **Next:**
 1. Run step 2 on `outputs/step_1/CWE415_groups` and `CWE416_groups` (through `track.py`).
-2. Check that the 6 husk groups (only `main`) are reported/excluded; compare with `scripts/check_group.py`.
+2. Check that the 6 husk groups (only `main`) are reported/excluded; compare with `liza/claude_reference/check_group.py`.
 3. Then step 3: rename (start from `src/prototype_cg_rename.py`).
 
 **Background:** `liza/discussions/discussion_personal_mac_1.md` (long; §12 is the 21 Sep handoff).

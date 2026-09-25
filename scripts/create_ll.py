@@ -13,8 +13,7 @@ c_cpp = re.compile('.*\.c(pp)?')
 
 
 def create_ll(source_file):
-    output_file = str(Path(source_file).with_suffix(".ll"))
-    subprocess.run(["clang", "-O0", "-g", "-S", "-isystem", "/home/hector/llap/tst/include", "-emit-llvm", source_file, "-o", output_file])
+    subprocess.run(["clang", "-O0", "-g", "-S", "-isystem", "/home/hector/llap/tst/include", "-emit-llvm", source_file])
 
 
 def main(input):

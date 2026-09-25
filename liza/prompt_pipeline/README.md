@@ -8,8 +8,8 @@ No LLVM IR is used; only `clang` (AST, `-c`) and `nm`.
 
 | Step | What | Module |
 |---|---|---|
-| 1 | Group pieces by the filename rule (sample = group + omit type) | `src/grouping.py` (reuses `scripts/merge_c.group_by_variant`) |
-| 2 | Gate: completeness / consistency check | `../scripts/check_group.py` |
+| 1 | Group pieces by the filename rule (sample = group + omit type) | `src/step_1_grouping.py` |
+| 2 | Gate: completeness / consistency check | `src/step_2_gate.py` (Claude's reference: `../claude_reference/check_group.py`) |
 | 3 | Rename functions and variables, one group-wide map | `src/rename.py` (from `src/prototype_cg_rename.py`) |
 | 4 | Build prompt text (ordered parts, neutral separators) | `src/build_prompt.py` |
 | 5 | Optional: Joern call-graph / data-flow facts on renamed code | `src/graph_facts.py` |
