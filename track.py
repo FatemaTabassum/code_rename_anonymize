@@ -5,7 +5,7 @@ Usage (from the repo root):
     uv run python track.py [--note "why I ran this"] -- <command> [args...]
 
     uv run python track.py --note "gate on CWE415" -- \
-        uv run python liza/prompt_pipeline/src/step_2_gate.py ...
+        uv run python prompt_pipeline/src/step_2_gate.py ...
 
 Each run appends one JSON line (time, command, code version, exit code,
 duration, note, last lines of output) to runs/runs.jsonl and saves the full

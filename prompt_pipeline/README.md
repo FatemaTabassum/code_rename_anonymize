@@ -30,17 +30,17 @@ Data: `/Users/fatema/projects/renaming_folder/CWE415`, `CWE416`.
 
 ```bash
 uv run python track.py --note "step 1: group CWE415" -- \
-  uv run python liza/prompt_pipeline/src/step_1_grouping.py \
+  uv run python prompt_pipeline/src/step_1_grouping.py \
   /Users/fatema/projects/renaming_folder/CWE415/source_files \
-  liza/prompt_pipeline/outputs/step_1/CWE415_groups
+  prompt_pipeline/outputs/step_1/CWE415_groups
 
 uv run python track.py --note "step 1: group CWE416" -- \
-  uv run python liza/prompt_pipeline/src/step_1_grouping.py \
+  uv run python prompt_pipeline/src/step_1_grouping.py \
   /Users/fatema/projects/renaming_folder/CWE416/source_files \
-  liza/prompt_pipeline/outputs/step_1/CWE416_groups
+  prompt_pipeline/outputs/step_1/CWE416_groups
 
 # coverage check (every source file lands in exactly one group)
-uv run python liza/prompt_pipeline/src/step_1_grouping.py --check \
+uv run python prompt_pipeline/src/step_1_grouping.py --check \
   /Users/fatema/projects/renaming_folder/CWE415/source_files
 ```
 
@@ -48,7 +48,7 @@ uv run python liza/prompt_pipeline/src/step_1_grouping.py --check \
 
 ```bash
 uv run python track.py --note "step 2: gate CWE415" -- \
-  uv run python liza/prompt_pipeline/src/step_2_gate.py \
-  liza/prompt_pipeline/outputs/step_1/CWE415_groups \
+  uv run python prompt_pipeline/src/step_2_gate.py \
+  prompt_pipeline/outputs/step_1/CWE415_groups \
   -I /Users/fatema/projects/renaming_folder/juliet/CWE190/source_files
 ```

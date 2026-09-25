@@ -1,5 +1,5 @@
 # generated / large
-liza/prompt_pipeline/outputs/
+prompt_pipeline/outputs/
 runs/logs/
 __pycache__/
 *.pyc
