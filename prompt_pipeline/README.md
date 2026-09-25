@@ -22,7 +22,7 @@ No LLVM IR is used; only `clang` (AST, `-c`) and `nm`.
 
 ## How to run
 
-Run from the repo root (`vulchecker-misc-main/`). Each command goes through `track.py`, so the exact
+Run from the repo root (`code_rename_anonymize/`). Each command goes through `track.py`, so the exact
 command, code version and result are recorded in `runs/runs.jsonl` (list with `python3 track.py --last 10`).
 Data: `/Users/fatema/projects/renaming_folder/CWE415`, `CWE416`.
 
