@@ -1,3 +1,55 @@
+"""
+Step 2 tests: test_step_2_gate.py
+
+These write tiny C/C++ files into a temporary folder that is deleted afterwards. They run the gate on that folder and check the gate's verdict. The gate has 5 checks:
+
+┌────────────┬───────────────────────────────────────────────────────────────────┐
+│   Check    │                           Plain meaning                           │
+├────────────┼───────────────────────────────────────────────────────────────────┤
+│ COMPILES   │ every file compiles on its own                                    │
+├────────────┼───────────────────────────────────────────────────────────────────┤
+│ CLOSED     │ every function the group calls is defined somewhere in the group  │
+├────────────┼───────────────────────────────────────────────────────────────────┤
+│ NO_DUP_DEF │ no function is defined twice                                      │
+├────────────┼───────────────────────────────────────────────────────────────────┤
+│ CONNECTED  │ the files link to each other as one program, not unrelated pieces │
+├────────────┼───────────────────────────────────────────────────────────────────┤
+│ ONE_MAIN   │ at most one main()                                                │
+└────────────┴───────────────────────────────────────────────────────────────────┘
+
+Test 4: a good group passes everything (line 28)
+- a.c has main, which calls bad(), which calls sink(). b.c defines sink().
+- Expected: all 5 checks pass. This proves the gate doesn't reject correct groups.
+
+Test 5: broken code (line 50)
+- One file, int main() { return }, with a syntax error.
+- Expected: COMPILES = fail, and the other 4 = None. None means "couldn't check", because once a file doesn't compile the gate can't inspect it, so it reports "unknown" rather than guessing.
+
+Test 6: a missing piece (line 57)
+- sink() is called but no file defines it. This is what a group looks like if a file like 53c got lost.
+- Expected: COMPILES passes (each file compiles on its own) but CLOSED fails.
+
+Test 7: two main()s (line 75)
+- Expected: ONE_MAIN fails. This is the step 2 guard against the same bug as Test 3.
+
+Test 8: the same function defined twice (line 81)
+- Expected: NO_DUP_DEF fails. This catches a file copied into a group twice.
+
+Test 9: C++ files linked only through a class (line 87)
+- driver.cpp calls action() through a base-class reference, and sink.cpp defines CWE415_Bad::action. The driver never names the sink function directly; the files are linked only through the C++ class machinery (the vtable).
+- Expected: CONNECTED passes.
+- Why: this copies real test case 81. A simpler gate would wrongly call these files "unrelated" and reject a good group.
+
+Test 10: the gate walks the whole output folder (line 124)
+- Builds a fake step 1 output with omitbad/CWE415_x_01 (fine) and omitgood/CWE415_x_01 (broken), then runs gate_groups() on the top folder.
+- Expected: exactly 2 results, the first passing everything and the second failing COMPILES. This checks that the gate finds every group in the real folder layout and doesn't mix up the two omit types.
+
+
+"""
+
+
+
+
 """Regression tests for src/step_2_gate.py."""
 import sys
 import tempfile
@@ -90,7 +142,7 @@ int main(void) {
         # indirect (vtable dispatch), so the driver never directly
         # references the sink's mangled symbol by name -- the only thing
         # tying the pieces together is the vtable/typeinfo linkage. Per
-        # code_juliet/README.md, this must still count as CONNECTED.
+        # others/code_juliet/README.md, this must still count as CONNECTED.
         write(self.group_dir / "shared.h", """
 class CWE415_Base {
 public:

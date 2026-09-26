@@ -1,3 +1,31 @@
+"""
+Step 1 tests: test_step_1_grouping.py
+
+All three feed a list of file names to group_files() and check which files end up together. No real files are needed, 
+since grouping uses only the names.
+
+Step 1 tests: test_step_1_grouping.py
+
+All three feed a list of file names to group_files() and check which files end up together. No real files are needed, since grouping uses only the names.
+
+Test 1: lettered pieces of one test case go together (line 14)
+- Input: ..._53a_omitgood.c and ..._53b_omitgood.c
+- Expected: one group, (stem, "53", "omitgood"), holding both files in order a, b.
+- Why: in Juliet, 53a, 53b and so on are pieces of one program split across files.
+
+Test 2: a named piece joins the lettered pieces (line 19)
+- Input: ..._81a_omitbad.cpp and ..._81_bad_omitbad.cpp
+- Expected: one group with both files.
+- Why: in real test case 81, the 81_bad file belongs to the same program as 81a. If it were split off, the sample would be missing code.
+
+Test 3: two stand-alone files must NOT be merged (line 27)
+- Input: ..._01_bad_omitbad.cpp and ..._01_good1_omitbad.cpp
+- Expected: two separate groups, one file each.
+- Why: this is a real bug that was found and fixed. Each of these files is its own complete program with its own main(). 
+Merging them put two main()s in one sample. The test makes sure that bug can't come back.
+
+"""
+
 """Regression tests for src/step_1_grouping.py grouping logic."""
 import sys
 import unittest
