@@ -8,6 +8,7 @@ The user often forgets where they left off and cannot keep documentation by hand
 - `git log` — history of code changes.
 - `discussions/discussion_personal_mac_1.md` — long background discussion; not the current state.
 - `prompt_pipeline/` — the user's pipeline (`src/`, `tests/`, `outputs/`; run commands in its README).
+- `paper_notes.md` — method details to report in the paper (Claude appends when a pipeline choice is made).
 - `claude_reference/` — Claude-written reference gate, kept only for a one-time cross-check with step 2.
 - `others/` — not the user's code; read-only (rule 0).
 

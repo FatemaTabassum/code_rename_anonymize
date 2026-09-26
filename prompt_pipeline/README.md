@@ -44,11 +44,8 @@ uv run python prompt_pipeline/src/step_1_grouping.py --check \
   /Users/fatema/projects/renaming_folder/CWE415/source_files
 ```
 
-**Step 2: gate** (not run yet; `-I` points at the folder with `std_testcase.h`)
+**Step 2: gate** (not run yet; `-I` points at the Juliet support headers kept in `juliet_support/`)
 
 ```bash
-uv run python track.py --note "step 2: gate CWE415" -- \
-  uv run python prompt_pipeline/src/step_2_gate.py \
-  prompt_pipeline/outputs/step_1/CWE415_groups \
-  -I /Users/fatema/projects/renaming_folder/juliet/CWE190/source_files
+uv run python track.py --note "step 2: gate CWE415" -- uv run python prompt_pipeline/src/step_2_gate.py prompt_pipeline/outputs/step_1/CWE415_groups -I prompt_pipeline/juliet_support
 ```
